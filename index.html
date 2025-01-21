@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CSV Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+        }
+        .highlight-red {
+            background-color: #ffcccc;
+        }
+        .highlight-yellow {
+            background-color: #fff4cc;
+        }
+        .inconsistency-text {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>CSV Analyzer</h1>
+    <input type="file" id="csvFile" accept=".csv">
+    <table id="csvTable">
+        <thead>
+            <tr id="tableHead"></tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <div class="inconsistency-text" id="inconsistencyText"></div>
+
+    <script>
+        document.getElementById('csvFile').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+
+            if (!file) return;
+
+            const reader = new FileReader();
+
+            reader.onload = function (e) {
+                const csvData = e.target.result;
+                const rows = csvData.split('\n').map(row => row.trim()).filter(row => row);
+                
+                const headers = rows[0].split(',');
+                const data = rows.slice(1).map(row => row.split(','));
+
+                // Render table header
+                const tableHead = document.getElementById('tableHead');
+                tableHead.innerHTML = '';
+                headers.forEach(header => {
+                    const th = document.createElement('th');
+                    th.textContent = header;
+                    tableHead.appendChild(th);
+                });
+
+                // Render table body
+                const tableBody = document.getElementById('tableBody');
+                tableBody.innerHTML = '';
+
+                // Render inconsistency text
+                const inconsistencyText = document.getElementById('inconsistencyText');
+                inconsistencyText.innerHTML = '';
+                let inconsistencyMessages = '';
+
+                data.forEach(row => {
+                    const tr = document.createElement('tr');
+                    let highlightClass = '';
+
+                    // Check inconsistency
+                    const userName = row[0].trim();
+                    const inUseYourData = row[1]?.trim() || '';
+                    const inUseJayantData = row[2]?.trim() || '';
+                    const chargebackFound = row[3]?.trim() || '';
+
+                    if (inUseYourData === 'Yes' && inUseJayantData === 'Yes' && chargebackFound === 'No') {
+                        highlightClass = 'highlight-red';
+                        inconsistencyMessages += `<p>${userName} has data in your data and Jayant's data, but chargeback is not active for this user.</p>`;
+                    } else if (inUseYourData === 'No' && inUseJayantData === 'No' && chargebackFound === 'Yes') {
+                        highlightClass = 'highlight-yellow';
+                        inconsistencyMessages += `<p>${userName}'s data is missing in your data and Jayant's data, but chargeback is active for this user.</p>`;
+                    } else if (inUseYourData === 'No' && inUseJayantData === 'Yes' && chargebackFound === 'Yes') {
+                        inconsistencyMessages += `<p>${userName}'s data is missing in your data, but Jayant says it's in use, and chargeback is active for this user.</p>`;
+                    } else if (inUseYourData === 'Yes' && inUseJayantData === 'No' && chargebackFound === 'No') {
+                        inconsistencyMessages += `<p>${userName} has data in your data, but Jayant doesn't have this data, and chargeback is not active for this user.</p>`;
+                    }
+
+                    row.forEach(cell => {
+                        const td = document.createElement('td');
+                        td.textContent = cell.trim();
+                        tr.appendChild(td);
+                    });
+
+                    if (highlightClass) {
+                        tr.classList.add(highlightClass);
+                    }
+
+                    tableBody.appendChild(tr);
+                });
+
+                inconsistencyText.innerHTML = inconsistencyMessages;
+            };
+
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
