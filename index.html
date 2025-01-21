@@ -31,17 +31,44 @@
         .inconsistency-text {
             margin-top: 20px;
         }
+        .filter-section {
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
     <h1>CSV Analyzer</h1>
     <input type="file" id="csvFile" accept=".csv">
+
+    <div class="filter-section">
+        <label for="filter">Filter:</label>
+        <select id="filter">
+            <option value="all">All</option>
+            <option value="highlight-red">Inconsistencies (Red)</option>
+            <option value="highlight-yellow">Inconsistencies (Yellow)</option>
+            <option value="all-yes">All Yes</option>
+            <option value="all-no">All No</option>
+            <option value="exclude-all-yes">Exclude All Yes</option>
+            <option value="exclude-all-no">Exclude All No</option>
+        </select>
+    </div>
+
     <table id="csvTable">
         <thead>
             <tr id="tableHead"></tr>
         </thead>
         <tbody id="tableBody"></tbody>
     </table>
+
+    <div class="filter-section">
+        <label for="textFilter">Text Filter:</label>
+        <select id="textFilter">
+            <option value="all">All</option>
+            <option value="missing-your-data">Show only your data missing</option>
+            <option value="missing-jayant-data">Show only Jayant data missing</option>
+            <option value="missing-chargeback">Show only chargeback missing</option>
+        </select>
+    </div>
 
     <div class="inconsistency-text" id="inconsistencyText"></div>
 
@@ -69,51 +96,118 @@
                     tableHead.appendChild(th);
                 });
 
-                // Render table body
                 const tableBody = document.getElementById('tableBody');
-                tableBody.innerHTML = '';
-
-                // Render inconsistency text
                 const inconsistencyText = document.getElementById('inconsistencyText');
-                inconsistencyText.innerHTML = '';
-                let inconsistencyMessages = '';
 
-                data.forEach(row => {
-                    const tr = document.createElement('tr');
-                    let highlightClass = '';
+                let allRows = [];
+                let inconsistencyMessages = [];
 
-                    // Check inconsistency
-                    const userName = row[0].trim();
-                    const inUseYourData = row[1]?.trim() || '';
-                    const inUseJayantData = row[2]?.trim() || '';
-                    const chargebackFound = row[3]?.trim() || '';
+                // Render rows and check for inconsistencies
+                function renderRows(data) {
+                    tableBody.innerHTML = '';
+                    inconsistencyText.innerHTML = '';
+                    inconsistencyMessages = [];
 
-                    if (inUseYourData === 'Yes' && inUseJayantData === 'Yes' && chargebackFound === 'No') {
-                        highlightClass = 'highlight-red';
-                        inconsistencyMessages += `<p>${userName} has data in your data and Jayant's data, but chargeback is not active for this user.</p>`;
-                    } else if (inUseYourData === 'No' && inUseJayantData === 'No' && chargebackFound === 'Yes') {
-                        highlightClass = 'highlight-yellow';
-                        inconsistencyMessages += `<p>${userName}'s data is missing in your data and Jayant's data, but chargeback is active for this user.</p>`;
-                    } else if (inUseYourData === 'No' && inUseJayantData === 'Yes' && chargebackFound === 'Yes') {
-                        inconsistencyMessages += `<p>${userName}'s data is missing in your data, but Jayant says it's in use, and chargeback is active for this user.</p>`;
-                    } else if (inUseYourData === 'Yes' && inUseJayantData === 'No' && chargebackFound === 'No') {
-                        inconsistencyMessages += `<p>${userName} has data in your data, but Jayant doesn't have this data, and chargeback is not active for this user.</p>`;
-                    }
+                    data.forEach(row => {
+                        const tr = document.createElement('tr');
+                        let highlightClass = '';
 
-                    row.forEach(cell => {
-                        const td = document.createElement('td');
-                        td.textContent = cell.trim();
-                        tr.appendChild(td);
+                        const userName = row[0].trim();
+                        const inUseYourData = row[1]?.trim() || '';
+                        const inUseJayantData = row[2]?.trim() || '';
+                        const chargebackFound = row[3]?.trim() || '';
+
+                        if (inUseYourData === 'Yes' && inUseJayantData === 'Yes' && chargebackFound === 'No') {
+                            highlightClass = 'highlight-red';
+                            inconsistencyMessages.push({
+                                message: `${userName} has data in your data and Jayant's data, but chargeback is not active for this user.`,
+                                type: 'missing-chargeback'
+                            });
+                        } else if (inUseYourData === 'No' && inUseJayantData === 'No' && chargebackFound === 'Yes') {
+                            highlightClass = 'highlight-yellow';
+                            inconsistencyMessages.push({
+                                message: `${userName}'s data is missing in your data and Jayant's data, but chargeback is active for this user.`,
+                                type: 'missing-your-data'
+                            });
+                        } else if (inUseYourData === 'No' && inUseJayantData === 'Yes' && chargebackFound === 'Yes') {
+                            inconsistencyMessages.push({
+                                message: `${userName}'s data is missing in your data, but Jayant says it's in use, and chargeback is active for this user.`,
+                                type: 'missing-your-data'
+                            });
+                        } else if (inUseYourData === 'Yes' && inUseJayantData === 'No' && chargebackFound === 'No') {
+                            inconsistencyMessages.push({
+                                message: `${userName} has data in your data, but Jayant doesn't have this data, and chargeback is not active for this user.`,
+                                type: 'missing-jayant-data'
+                            });
+                        }
+
+                        row.forEach(cell => {
+                            const td = document.createElement('td');
+                            td.textContent = cell.trim();
+                            tr.appendChild(td);
+                        });
+
+                        if (highlightClass) {
+                            tr.classList.add(highlightClass);
+                        }
+
+                        tableBody.appendChild(tr);
+                        allRows.push({ row: tr, data: row, highlightClass });
                     });
 
-                    if (highlightClass) {
-                        tr.classList.add(highlightClass);
-                    }
+                    renderInconsistencies();
+                }
 
-                    tableBody.appendChild(tr);
+                function renderInconsistencies(filter = 'all') {
+                    inconsistencyText.innerHTML = '';
+                    inconsistencyMessages
+                        .filter(msg => filter === 'all' || msg.type === filter)
+                        .forEach(msg => {
+                            const p = document.createElement('p');
+                            p.textContent = msg.message;
+                            inconsistencyText.appendChild(p);
+                        });
+                }
+
+                renderRows(data);
+
+                // Apply table filters
+                document.getElementById('filter').addEventListener('change', function () {
+                    const filterValue = this.value;
+
+                    if (filterValue === 'all') {
+                        allRows.forEach(({ row }) => row.style.display = '');
+                    } else if (filterValue === 'highlight-red' || filterValue === 'highlight-yellow') {
+                        allRows.forEach(({ row, highlightClass }) => {
+                            row.style.display = highlightClass === filterValue ? '' : 'none';
+                        });
+                    } else if (filterValue === 'all-yes') {
+                        allRows.forEach(({ row, data }) => {
+                            const allYes = data.slice(1).every(value => value.trim() === 'Yes');
+                            row.style.display = allYes ? '' : 'none';
+                        });
+                    } else if (filterValue === 'all-no') {
+                        allRows.forEach(({ row, data }) => {
+                            const allNo = data.slice(1).every(value => value.trim() === 'No');
+                            row.style.display = allNo ? '' : 'none';
+                        });
+                    } else if (filterValue === 'exclude-all-yes') {
+                        allRows.forEach(({ row, data }) => {
+                            const allYes = data.slice(1).every(value => value.trim() === 'Yes');
+                            row.style.display = allYes ? 'none' : '';
+                        });
+                    } else if (filterValue === 'exclude-all-no') {
+                        allRows.forEach(({ row, data }) => {
+                            const allNo = data.slice(1).every(value => value.trim() === 'No');
+                            row.style.display = allNo ? 'none' : '';
+                        });
+                    }
                 });
 
-                inconsistencyText.innerHTML = inconsistencyMessages;
+                // Apply text filters
+                document.getElementById('textFilter').addEventListener('change', function () {
+                    renderInconsistencies(this.value);
+                });
             };
 
             reader.readAsText(file);
